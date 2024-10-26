@@ -1,0 +1,403 @@
+Sub MizanOlustur()
+    Dim wsSource As Worksheet
+    Dim wsTarget As Worksheet
+    Dim i As Long
+    Dim lastRow As Long, lastRowTarget As Long
+    Dim rngSource As Range, rngTarget As Range
+    
+    ' Ekran güncellemesini kapat
+    Application.ScreenUpdating = False
+
+    ' Kaynak ve hedef sayfaları belirle
+    Set wsSource = ThisWorkbook.Sheets("MİZAN ANALİZ")
+    Set wsTarget = ThisWorkbook.Sheets("MİZAN")
+    
+    ' Mizan sayfasındaki son satırı bul (boş değilse üzerine yazmasın)
+    lastRowTarget = wsTarget.Cells(wsTarget.Rows.Count, 1).End(xlUp).Row
+    If lastRowTarget < 2 Then lastRowTarget = 2 ' İlk dolu olmayan satırdan başlasın, en az 2. satırdan
+    
+    ' Mizan Denetim sayfasındaki son satırı bul
+    lastRow = wsSource.Cells(wsSource.Rows.Count, 1).End(xlUp).Row
+
+    ' Mizan Denetim sayfasında veri aralığını kontrol et
+    For i = 5 To lastRow ' Veriler 5. satırdan itibaren başlıyor
+        ' Borç (C), Alacak (D), Borç Bakiye (E) ve Alacak Bakiye (F) sütunlarını kontrol et
+        If IsNumeric(wsSource.Cells(i, 3).Value) And IsNumeric(wsSource.Cells(i, 4).Value) And IsNumeric(wsSource.Cells(i, 5).Value) And IsNumeric(wsSource.Cells(i, 6).Value) Then
+            If wsSource.Cells(i, 3).Value > 0 Or wsSource.Cells(i, 4).Value > 0 Or wsSource.Cells(i, 5).Value > 0 Or wsSource.Cells(i, 6).Value > 0 Then
+                lastRowTarget = lastRowTarget + 1
+                ' Kaynak veriyi al ve hedefe yapıştır
+                Set rngSource = wsSource.Range(wsSource.Cells(i, 1), wsSource.Cells(i, 6)) ' Kaynak aralığı (A:F sütunları)
+                Set rngTarget = wsTarget.Range(wsTarget.Cells(lastRowTarget, 1), wsTarget.Cells(lastRowTarget, 6)) ' Hedef aralığı (A:F)
+
+                rngSource.Copy
+                rngTarget.PasteSpecial Paste:=xlPasteValuesAndNumberFormats ' Sadece değerler ve sayı biçimleri kopyala
+
+                ' Biçimlendirme kopyala
+                rngTarget.PasteSpecial Paste:=xlPasteFormats ' Formatları (yazı tipi ve hücre formatı) kopyala
+                
+                ' Kenarlık ekle
+                With rngTarget.Borders
+                    .LineStyle = xlContinuous
+                    .Weight = xlThin
+                End With
+            End If
+        End If
+    Next i
+    
+    ' Kopyalama işlemini sonlandır
+    Application.CutCopyMode = False
+
+    ' Ekran güncellemesini tekrar aç
+    Application.ScreenUpdating = True
+    
+    MsgBox "Mizan başarıyla oluşturuldu!"
+End Sub
+Private Sub Btn_altmanZ_Click()
+
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("FİNANSAL VERİLER")
+    
+    ' Verilerin alınması
+    Dim donemKariFinansmanGiderleri As Double, varliklarToplami As Double
+    Dim netSatislar As Double, ozsermaye As Double, borclarToplami As Double
+    Dim dagitilmamisKarlar As Double, netIsletmeSermayesi As Double
+
+    donemKariFinansmanGiderleri = ws.Range("S4").Value
+    varliklarToplami = ws.Range("S5").Value
+    netSatislar = ws.Range("S6").Value
+    ozsermaye = ws.Range("S7").Value
+    borclarToplami = ws.Range("S8").Value
+    dagitilmamisKarlar = ws.Range("S9").Value
+    netIsletmeSermayesi = ws.Range("S10").Value
+    
+    ' Şirketin Finansal Risk Oranlarının Hesaplanması
+    If varliklarToplami <> 0 Then
+        ws.Range("S12").Value = netIsletmeSermayesi / varliklarToplami
+        ws.Range("S13").Value = dagitilmamisKarlar / varliklarToplami
+        ws.Range("S14").Value = donemKariFinansmanGiderleri / varliklarToplami
+        ws.Range("S15").Value = ozsermaye / borclarToplami
+        ws.Range("S16").Value = netSatislar / varliklarToplami
+    End If
+
+    ' Şirketin Finansal Risk Oranları Çarpanları sabit katsayıları yerleştirme
+ws.Range("S18").Value = 1.2  ' Net İşletme Sermayesi / Varlıklar Toplamı katsayısı
+ws.Range("S19").Value = 1.4  ' Dağıtılmamış Karlar / Varlıklar Toplamı katsayısı
+ws.Range("S20").Value = 3.3  ' Dönem Kârı + Finansman Giderleri / Varlıklar Toplamı katsayısı
+ws.Range("S21").Value = 0.6  ' Öz Sermaye / Borçlar Toplamı katsayısı
+ws.Range("S22").Value = 1#   ' Net Satışlar / Varlıklar Toplamı katsayısı
+
+
+    ' Altman Z-Skor hesaplaması
+    Dim zSkor As Double
+    zSkor = ws.Range("S18").Value + ws.Range("S19").Value + ws.Range("S20").Value + ws.Range("S21").Value + ws.Range("S22").Value
+    ws.Range("S30").Value = zSkor
+
+    ' Z-Skor yorum ve renklendirme
+    If zSkor >= 2.99 Then
+        ws.Range("R30").Value = "Firma da Finansal Sorun Yoktur"
+        ws.Range("S30").Interior.Color = RGB(0, 255, 0)  ' Yeşil arka plan
+        ws.Range("S30").Font.Bold = True
+    ElseIf zSkor >= 1.8 And zSkor < 2.99 Then
+        ws.Range("R30").Value = "Firma Riskli Durumdadır"
+        ws.Range("S30").Interior.Color = RGB(255, 165, 0)  ' Turuncu arka plan
+        ws.Range("S30").Font.Bold = True
+    Else
+        ws.Range("R30").Value = "Firma Çok Riskli Durumdadır"
+        ws.Range("S30").Interior.Color = RGB(255, 0, 0)  ' Kırmızı arka plan
+        ws.Range("S30").Font.Bold = True
+   
+    End If
+
+    ' Oran Bazında Finansal Risk Değeri Hesaplanması
+    ws.Range("S24").Value = ws.Range("S12").Value * 1.2
+    ws.Range("S25").Value = ws.Range("S13").Value * 1.4
+    ws.Range("S26").Value = ws.Range("S14").Value * 3.3
+    ws.Range("S27").Value = ws.Range("S15").Value * 0.6
+    ws.Range("S28").Value = ws.Range("S16").Value * 1#
+
+    ' Oran Bazında Finansal Risk Değeri Toplamı
+    Dim riskSkoruToplam As Double
+    riskSkoruToplam = ws.Range("S24").Value + ws.Range("S25").Value + ws.Range("S26").Value + ws.Range("S27").Value + ws.Range("S28").Value
+    ws.Range("S33").Value = riskSkoruToplam
+
+    ' Sonuç mesajı
+    MsgBox "Altman Z-Skor hesaplaması tamamlandı.", vbInformation
+
+End Sub
+
+Private Sub Btn_finansalRisk_Click()
+
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("FİNANSAL VERİLER")
+    
+    ' Verilerin alınması
+    Dim donenVarliklar As Double, kvFaizDoganBorclar As Double, kvFaizDogmayanBorclar As Double
+    Dim uvBorclar As Double, borclarToplami As Double, ozsermaye As Double
+    Dim kaynaklarToplami As Double, netSatislar As Double
+    Dim brutSatisKari As Double, vergiOncesiKar As Double
+
+    donenVarliklar = ws.Range("I4").Value
+    kvFaizDoganBorclar = ws.Range("I5").Value
+    kvFaizDogmayanBorclar = ws.Range("I6").Value
+    uvBorclar = ws.Range("I7").Value
+    borclarToplami = ws.Range("I8").Value
+    ozsermaye = ws.Range("I9").Value
+    kaynaklarToplami = ws.Range("I10").Value
+    netSatislar = ws.Range("I11").Value
+    brutSatisKari = ws.Range("I12").Value
+    vergiOncesiKar = ws.Range("I13").Value
+
+    ' Şirketin Finansal Risk Oranları hesaplamaları
+    If kaynaklarToplami <> 0 Then
+        ws.Range("I15").Value = ozsermaye / kaynaklarToplami  ' Öz Sermaye / Kaynaklar Toplamı
+        ws.Range("I16").Value = brutSatisKari / kaynaklarToplami  ' Brüt Satış Karı / Kaynaklar Toplamı
+        ws.Range("I17").Value = vergiOncesiKar / kaynaklarToplami  ' Vergi Öncesi Kar / Kaynaklar Toplamı
+        ws.Range("I18").Value = ozsermaye / borclarToplami  ' Öz Sermaye / Borçlar Toplamı
+        ws.Range("I19").Value = netSatislar / kaynaklarToplami  ' Net Satışlar / Kaynaklar Toplamı
+    End If
+
+    ' Şirketin Finansal Risk Oranları Çarpanları - sabit katsayıların kullanılması
+    ws.Range("I21").Value = 1.2  ' Öz Sermaye / Kaynaklar Toplamı katsayısı
+    ws.Range("I22").Value = 1.4  ' Brüt Satış Karı / Kaynaklar Toplamı katsayısı
+    ws.Range("I23").Value = 3.3  ' Vergi Öncesi Kar / Kaynaklar Toplamı katsayısı
+    ws.Range("I24").Value = 0.6  ' Öz Sermaye / Borçlar Toplamı katsayısı
+    ws.Range("I25").Value = 1#   ' Net Satışlar / Kaynaklar Toplamı katsayısı
+
+    ' Oran Bazında Finansal Risk Değeri hesaplanması (oran x çarpan)
+    ws.Range("I27").Value = ws.Range("I15").Value * ws.Range("I21").Value
+    ws.Range("I28").Value = ws.Range("I16").Value * ws.Range("I22").Value
+    ws.Range("I29").Value = ws.Range("I17").Value * ws.Range("I23").Value
+    ws.Range("I30").Value = ws.Range("I18").Value * ws.Range("I24").Value
+    ws.Range("I31").Value = ws.Range("I19").Value * ws.Range("I25").Value
+
+    ' Finansal Risk Değeri Toplamı
+    Dim finansalRiskDegeri As Double
+    finansalRiskDegeri = ws.Range("I27").Value + ws.Range("I28").Value + ws.Range("I29").Value + ws.Range("I30").Value + ws.Range("I31").Value
+    ws.Range("I33").Value = finansalRiskDegeri
+
+    ' Finansal Risk Değeri Yorumu
+    If finansalRiskDegeri >= 7 Then
+        ws.Range("H33").Value = "Düşük Risk"
+        ws.Range("I33").Interior.Color = RGB(0, 255, 0)  ' Yeşil arka plan
+        ws.Range("I33").Font.Bold = True
+    ElseIf finansalRiskDegeri >= 3 And finansalRiskDegeri < 7 Then
+        ws.Range("H33").Value = "Orta Risk"
+        ws.Range("I33").Interior.Color = RGB(255, 165, 0)  ' Turuncu arka plan
+        ws.Range("I33").Font.Bold = True
+    Else
+        ws.Range("H33").Value = "Yüksek Risk"
+        ws.Range("I33").Interior.Color = RGB(255, 0, 0)  ' Kırmızı arka plan
+        ws.Range("I33").Font.Bold = True
+    End If
+
+    MsgBox "Finansal Risk Hesaplaması tamamlandı.", vbInformation
+
+End Sub
+
+
+
+Private Sub Btn_rasyohesapla_Click()
+
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("FİNANSAL VERİLER")
+    
+    ' Verileri hücrelerden alıyoruz
+    Dim donenVarliklar As Double, nakit As Double, stoklar As Double, kVYK As Double
+    Dim uVYK As Double, toplamYK As Double, ozkaynak As Double, aktifToplam As Double
+    Dim netKazanc As Double, satisMaliyeti As Double, brutsatis As Double, dagitilmamisKarlar As Double
+    Dim ticariAlacaklar As Double, menkulKiymetler As Double, odenmisSermaye As Double
+
+    ' Verilerin hücrelerden alınması
+    donenVarliklar = ws.Range("B37").Value
+    nakit = ws.Range("B38").Value
+    stoklar = ws.Range("B39").Value
+    kVYK = ws.Range("B40").Value
+    uVYK = ws.Range("B41").Value
+    toplamYK = ws.Range("B42").Value
+    ozkaynak = ws.Range("B43").Value
+    aktifToplam = ws.Range("B44").Value
+    netKazanc = ws.Range("B48").Value
+    satisMaliyeti = ws.Range("B49").Value
+    brutsatis = ws.Range("B57").Value
+    dagitilmamisKarlar = ws.Range("B58").Value
+    ticariAlacaklar = ws.Range("B52").Value
+    menkulKiymetler = ws.Range("B68").Value
+    odenmisSermaye = ws.Range("B47").Value
+
+    ' Cari Oran
+    If kVYK <> 0 Then
+        ws.Range("B8").Value = donenVarliklar / kVYK
+        ws.Range("C8").Value = 1.5 ' Baz değer
+        If ws.Range("B8").Value >= ws.Range("C8").Value Then
+            ws.Range("D8").Value = "Likidite iyi"
+        Else
+            ws.Range("D8").Value = "Likidite zayıf"
+        End If
+    End If
+    
+    ' Likidite Oranı
+    If kVYK <> 0 Then
+        ws.Range("B9").Value = (donenVarliklar - stoklar) / kVYK
+        ws.Range("C9").Value = 1#  ' Baz değer
+        If ws.Range("B9").Value >= ws.Range("C9").Value Then
+            ws.Range("D9").Value = "Stok hariç likidite yeterli"
+        Else
+            ws.Range("D9").Value = "Likidite yetersiz"
+        End If
+    End If
+    
+    ' Nakit Oranı
+    If kVYK <> 0 Then
+        ws.Range("B10").Value = (nakit + menkulKiymetler) / kVYK
+        ws.Range("C10").Value = 0.5 ' Baz değer
+        If ws.Range("B10").Value >= ws.Range("C10").Value Then
+            ws.Range("D10").Value = "Nakit yeterli"
+        Else
+            ws.Range("D10").Value = "Nakit yetersiz"
+        End If
+    End If
+    
+    ' Stok Bağ Oranı
+    If stoklar <> 0 Then
+        ws.Range("B11").Value = (kVYK - (nakit + menkulKiymetler)) / stoklar
+        ws.Range("C11").Value = 1.2 ' Baz değer
+        If ws.Range("B11").Value >= ws.Range("C11").Value Then
+            ws.Range("D11").Value = "Stok oranı iyi"
+        Else
+            ws.Range("D11").Value = "Stok oranı zayıf"
+        End If
+    End If
+    
+    ' Çabuk Oran
+    If kVYK <> 0 Then
+        ws.Range("B12").Value = (donenVarliklar - stoklar) / kVYK
+        ws.Range("C12").Value = 1.1 ' Baz değer
+        If ws.Range("B12").Value >= ws.Range("C12").Value Then
+            ws.Range("D12").Value = "Çabuk oran iyi"
+        Else
+            ws.Range("D12").Value = "Çabuk oran zayıf"
+        End If
+    End If
+    
+    ' Kaldıraç Oranı
+    If aktifToplam <> 0 Then
+        ws.Range("B14").Value = toplamYK / aktifToplam
+        ws.Range("C14").Value = 0.5 ' Baz değer
+        If ws.Range("B14").Value >= ws.Range("C14").Value Then
+            ws.Range("D14").Value = "Kaldıraç yüksek"
+        Else
+            ws.Range("D14").Value = "Kaldıraç düşük"
+        End If
+    End If
+    
+    ' Özkaynak Oranı
+    If aktifToplam <> 0 Then
+        ws.Range("B15").Value = ozkaynak / aktifToplam
+        ws.Range("C15").Value = 0.5 ' Baz değer
+        If ws.Range("B15").Value >= ws.Range("C15").Value Then
+            ws.Range("D15").Value = "Sağlam özkaynak yapısı"
+        Else
+            ws.Range("D15").Value = "Zayıf özkaynak yapısı"
+        End If
+    End If
+    
+    ' Finansman Oranı
+    If toplamYK <> 0 Then
+        ws.Range("B16").Value = ozkaynak / toplamYK
+        ws.Range("C16").Value = 1#  ' Baz değer
+        If ws.Range("B16").Value >= ws.Range("C16").Value Then
+            ws.Range("D16").Value = "Finansman yapısı güçlü"
+        Else
+            ws.Range("D16").Value = "Finansman yapısı zayıf"
+        End If
+    End If
+    
+    ' KVYK Oranı
+    If aktifToplam <> 0 Then
+        ws.Range("B17").Value = kVYK / aktifToplam
+        ws.Range("C17").Value = 0.4 ' Baz değer
+        If ws.Range("B17").Value >= ws.Range("C17").Value Then
+            ws.Range("D17").Value = "Yüksek kısa vadeli yükümlülük"
+        Else
+            ws.Range("D17").Value = "Kısa vadeli yükümlülük düşük"
+        End If
+    End If
+    
+    ' UVYK Oranı
+    If aktifToplam <> 0 Then
+        ws.Range("B18").Value = uVYK / aktifToplam
+        ws.Range("C18").Value = 0.3 ' Baz değer
+        If ws.Range("B18").Value >= ws.Range("C18").Value Then
+            ws.Range("D18").Value = "Uzun vadeli yükümlülük yüksek"
+        Else
+            ws.Range("D18").Value = "Uzun vadeli yükümlülük düşük"
+        End If
+    End If
+    
+    ' Yabancı Kaynakların Vade Yapısı Oranı
+    If toplamYK <> 0 Then
+        ws.Range("B19").Value = kVYK / toplamYK
+        ws.Range("C19").Value = 0.6 ' Baz değer
+        If ws.Range("B19").Value >= ws.Range("C19").Value Then
+            ws.Range("D19").Value = "Kısa vadeli yükümlülük yüksek"
+        Else
+            ws.Range("D19").Value = "Kısa vadeli yükümlülük düşük"
+        End If
+    End If
+    
+    ' Otofinansman Oranı
+    If odenmisSermaye <> 0 Then
+        ws.Range("B20").Value = dagitilmamisKarlar / odenmisSermaye
+        ws.Range("C20").Value = 0.5 ' Baz değer
+        If ws.Range("B20").Value >= ws.Range("C20").Value Then
+            ws.Range("D20").Value = "Otofinansman güçlü"
+        Else
+            ws.Range("D20").Value = "Otofinansman zayıf"
+        End If
+    End If
+    
+    ' Finansman Giderleri Karşılama Oranı
+    If satisMaliyeti <> 0 Then
+        ws.Range("B21").Value = brutsatis / satisMaliyeti
+        ws.Range("C21").Value = 3 ' Baz değer
+        If ws.Range("B21").Value >= ws.Range("C21").Value Then
+            ws.Range("D21").Value = "Finansman giderleri iyi karşılanıyor"
+        Else
+            ws.Range("D21").Value = "Finansman giderleri zayıf"
+        End If
+    End If
+
+    MsgBox "Rasyo hesaplamaları tamamlandı!", vbInformation
+
+End Sub
+
+
+
+Private Sub cmd_checkupyazdir_Click()
+Sheets("RAPOR").Select
+ActiveWindow.SelectedSheets.PrintOut ' Rapor sayfasını yazdır
+
+' Yazdırma işlemi tamamlandıktan sonra ANA SAYFA'ya dön
+Sheets("ANA SAYFA").Select
+
+End Sub
+
+Private Sub cmd_maliraporyazdir_Click()
+
+Sheets("FİNANSAL VERİLER").Select
+ActiveWindow.SelectedSheets.PrintOut ' Rapor sayfasını yazdır
+
+' Yazdırma işlemi tamamlandıktan sonra ANA SAYFA'ya dön
+Sheets("ANA SAYFA").Select
+End Sub
+
+
+Private Sub CommandButton1_Click()
+
+End Sub
+
+Private Sub Worksheet_SelectionChange(ByVal Target As Range)
+Sheets("ana sayfa").Select
+Sheets("ana sayfa").ScrollArea = "A1:T24"
+End Sub
+
